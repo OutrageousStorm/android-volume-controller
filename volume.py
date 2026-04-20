@@ -1,60 +1,72 @@
 #!/usr/bin/env python3
 """
-volume.py -- Control Android volume levels via ADB
-Usage: python3 volume.py get          # show all volumes
-       python3 volume.py set music 10  # set music to 10/15
-       python3 volume.py mute          # mute all
-       python3 volume.py vibrate       # mute + disable vibration
+volume.py -- Control Android volume streams via ADB
+Get, set, mute, unmute per-stream volume.
+Usage: python3 volume.py --get
+       python3 volume.py --set 15
+       python3 volume.py --stream music --set 8
 """
-import subprocess, argparse, sys
+import subprocess, argparse
 
 STREAMS = {
-    "voice": 0, "system": 1, "ring": 2, "music": 3,
-    "alarm": 4, "notification": 5, "dtmf": 6, "accessibility": 10,
+    "voice": 0,
+    "music": 1,  # default for media
+    "alarm": 4,
+    "notification": 5,
+    "dtmf": 8,
+    "accessibility": 10,
 }
 
 def adb(cmd):
-    return subprocess.run(f"adb shell {cmd}", shell=True, capture_output=True, text=True).stdout.strip()
+    r = subprocess.run(f"adb shell {cmd}", shell=True, capture_output=True, text=True)
+    return r.stdout.strip()
 
-def get_volumes():
-    out = adb("dumpsys audio_service | grep 'Vol")
-    print("Current volumes:")
-    for line in out.splitlines()[:6]:
-        print(f"  {line}")
+def get_volume(stream_id):
+    # dumpsys audio shows volumes per-stream
+    raw = adb("dumpsys audio")
+    for line in raw.splitlines():
+        if f"volumeIndexDefault_stream_{stream_id}" in line or f"index={stream_id}" in line:
+            return line
+    return None
 
-def set_volume(stream, level):
-    stream_id = STREAMS.get(stream.lower())
-    if stream_id is None:
-        print(f"Unknown stream: {stream}. Use: {', '.join(STREAMS.keys())}")
-        sys.exit(1)
-    adb(f"service call audio {stream_id} {level} {stream_id}")
-    print(f"✓ {stream} → {level}")
+def set_volume(stream_id, level):
+    """Set volume for a stream (0-15 typically)"""
+    adb(f"media volume --show --set 0 -- {level}")
+    # More reliable: use settings
+    adb(f"settings put global volume_music {level}")
 
-def mute_all():
-    for stream in ["ring", "music", "alarm", "notification", "system"]:
-        adb(f"service call audio 1 0")
-    print("✓ All streams muted")
+def mute_stream(stream_id):
+    adb(f"media volume --set {stream_id} 0")
+
+def unmute_stream(stream_id):
+    adb(f"media volume --set {stream_id} 5")
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", nargs="?", default="get")
-    parser.add_argument("stream", nargs="?")
-    parser.add_argument("level", nargs="?", type=int)
+    parser.add_argument("--get", action="store_true")
+    parser.add_argument("--set", type=int)
+    parser.add_argument("--stream", default="music", choices=STREAMS.keys())
+    parser.add_argument("--mute", action="store_true")
+    parser.add_argument("--unmute", action="store_true")
     args = parser.parse_args()
 
-    if args.action == "get":
-        get_volumes()
-    elif args.action == "set":
-        if not args.stream or args.level is None:
-            print("Usage: volume.py set <stream> <level>")
-            sys.exit(1)
-        set_volume(args.stream, args.level)
-    elif args.action == "mute":
-        mute_all()
-    elif args.action == "vibrate":
-        adb("settings put system vibrate_on 0")
-        mute_all()
-        print("✓ Vibration disabled + muted")
+    stream_id = STREAMS[args.stream]
+
+    if args.get:
+        raw = adb("dumpsys audio | grep 'vol_music\|vol_alarm\|vol_notification'")
+        print("Current volumes:")
+        print(raw)
+    elif args.set is not None:
+        print(f"Setting {args.stream} to {args.set}")
+        set_volume(stream_id, args.set)
+    elif args.mute:
+        print(f"Muting {args.stream}")
+        mute_stream(stream_id)
+    elif args.unmute:
+        print(f"Unmuting {args.stream}")
+        unmute_stream(stream_id)
+    else:
+        parser.print_help()
 
 if __name__ == "__main__":
     main()
