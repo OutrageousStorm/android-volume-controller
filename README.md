@@ -1,21 +1,24 @@
 # 🔊 Android Volume Controller
 
-Control Android volume via ADB — get current level, set per-stream, mute, unmute, adjust brightness.
+Control all audio volumes from PC via ADB — no touching the device.
+
+## Tools
+
+| Tool | What it does |
+|------|-------------|
+| `volume_control.py` | Interactive volume mixer |
+| `sound_profiles.py` | Switch between sound profiles (silent, vibrate, normal, loud) |
+| `audio_route.py` | Route audio to speaker, headphones, Bluetooth |
 
 ## Usage
 
 ```bash
-python3 volume.py --get                    # get current volumes
-python3 volume.py --set 15                 # set music volume to 15
-python3 volume.py --stream alarm --set 10  # set alarm to 10
-python3 volume.py --mute voice             # mute voice calls
-python3 volume.py --unmute all             # unmute everything
-```
+# Interactive mixer
+python3 volume_control.py
 
-## Streams
-- `voice`: call volume
-- `music`: media/music volume (default)
-- `alarm`: alarm volume
-- `notification`: notification sounds
-- `dtmf`: dial tones
-- `accessibility`: accessibility volume (Android 8+)
+# Set specific volume
+python3 volume_control.py --set media 15  # max=15
+
+# Load a preset
+python3 sound_profiles.py --load silent
+```
